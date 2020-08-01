@@ -40,13 +40,9 @@ class CrawlerCommand extends Command
 
         $this->crawler->addHtmlContent((string) $request->getBody());
 
-        $cells = $this->crawler->filter('table tr td p')->each(function (Crawler $p) {
-            if ($p->filter('span')->count() > 0) {
-                return $p->children()->first()->text();
-            }
-
-            return $p->text();
-        });
+        $cells = $this->crawler->filter('table > tbody > tr > td')
+            ->slice(1)
+            ->each(fn (Crawler $crawler) => $this->parseTd($crawler));
 
         $codes = [];
         $path = __DIR__ . '/../../data/local-codes.json';
@@ -71,5 +67,24 @@ class CrawlerCommand extends Command
         }
 
          return Command::FAILURE;
+    }
+
+    private function parseTd(Crawler $td): string
+    {
+        if ($td->children()->count() === 1) {
+            return $td->children()->first()->text();
+        }
+
+        // Try to match a resolution "31 (Redação dada pela Resolução nº 643, de 2 de dezembro de 2014)"
+        preg_match('/(\w+)\(/', $td->children()->eq(1)->text(), $matches);
+
+        if (count($matches) === 0) {
+            // Try to match a double code inside at first "p"
+            preg_match('/.*(\d{2})/', $td->children()->eq(0)->text(), $codes);
+
+            return $codes[1];
+        }
+
+        return $matches[1];
     }
 }
